@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UFO Abduction Arcade</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(to bottom, #0a0a1a 0%, #1a0a2a 50%, #2a1a3a 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: #fff;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            cursor: none;
+        }
+
+        /* UFO Saucer */
+        #saucer {
+            position: absolute;
+            width: 120px;
+            height: 60px;
+            transition: none;
+            z-index: 100;
+            filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.6));
+        }
+
+        #saucer svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Light Beam Cone */
+        #light-beam {
+            position: absolute;
+            width: 100px;
+            height: 400px;
+            background: linear-gradient(to bottom, 
+                rgba(255, 255, 100, 0) 0%,
+                rgba(255, 255, 100, 0.3) 20%,
+                rgba(255, 255, 100, 0.5) 50%,
+                rgba(255, 255, 100, 0.7) 80%,
+                rgba(255, 255, 100, 0.9) 100%);
+            clip-path: polygon(50% 0%, 20% 100%, 80% 100%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            z-index: 50;
+            filter: blur(2px);
+        }
+
+        #light-beam.active {
+            opacity: 1;
+            animation: beamPulse 0.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes beamPulse {
+            from { opacity: 0.7; }
+            to { opacity: 1; }
+        }
+
+        /* Physics Objects */
+        .object {
+            position: absolute;
+            transition: transform 0.1s linear;
+            cursor: pointer;
+        }
+
+        .object.abducting {
+            animation: shake 0.2s infinite;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(-2px, 2px) rotate(-1deg); }
+            75% { transform: translate(2px, -2px) rotate(1deg); }
+        }
+
+        /* UI Elements */
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 200;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+
+        .ui-panel {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .score {
+            font-size: 24px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .combo {
+            font-size: 18px;
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
+            margin-top: 5px;
+        }
+
+        .combo.multiplier {
+            animation: comboGlow 0.5s ease-in-out;
+        }
+
+        @keyframes comboGlow {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); color: #ffff00; }
+        }
+
+        .instructions {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        /* Demo Mode Overlay */
+        #demo-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px 50px;
+            border-radius: 15px;
+            border: 3px solid #ff00ff;
+            text-align: center;
+            z-index: 300;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #demo-overlay.show {
+            opacity: 1;
+        }
+
+        #demo-overlay h1 {
+            font-size: 32px;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            margin-bottom: 10px;
+        }
+
+        #demo-overlay p {
+            font-size: 18px;
+            color: #00ffff;
+            margin: 5px 0;
+        }
+
+        /* Stars Background */
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* Floating Text */
+        .floating-text {
+            position: absolute;
+            font-size: 20px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 250;
+            animation: floatUp 1s ease-out forwards;
+        }
+
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+        }
+
+        /* Controls */
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: flex;
+            gap: 10px;
+            pointer-events: all;
+        }
+
+        button {
+            background: rgba(0, 255, 255, 0.2);
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: rgba(0, 255, 255, 0.4);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.6);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        #start-btn {
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+
+        #start-btn:hover {
+            background: rgba(0, 255, 0, 0.4);
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+        }
+
+        /* Object Types */
+        .object.cow { font-size: 40px; }
+        .object.car { font-size: 35px; }
+        .object.ufo { font-size: 35px; }
+        .object.trees { font-size: 30px; }
+        .object.human { font-size: 35px; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- UFO Saucer -->
+        <div id="saucer">
+            <svg viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg">
+                <!-- Top dome -->
+                <ellipse cx="60" cy="20" rx="35" ry="15" fill="#00ffff" opacity="0.7"/>
+                <ellipse cx="60" cy="20" rx="25" ry="10" fill="#ffffff" opacity="0.9"/>
+                <!-- Main body -->
+                <ellipse cx="60" cy="30" rx="50" ry="20" fill="#0088ff" opacity="0.8"/>
+                <ellipse cx="60" cy="30" rx="45" ry="15" fill="#00ffff" opacity="0.6"/>
+                <!-- Lights on the rim -->
+                <circle cx="20" cy="35" r="3" fill="#ffff00" class="light"/>
+                <circle cx="40" cy="35" r="3" fill="#ffff00" class="light"/>
+                <circle cx="60" cy="35" r="3" fill="#ffff00" class="light"/>
+                <circle cx="80" cy="35" r="3" fill="#ffff00" class="light"/>
+                <circle cx="100" cy="35" r="3" fill="#ffff00" class="light"/>
+            </svg>
+        </div>
+
+        <!-- Light Beam -->
+        <div id="light-beam"></div>
+
+        <!-- UI -->
+        <div id="ui">
+            <div class="ui-panel">
+                <div class="score">SCORE: <span id="score-value">0</span></div>
+                <div class="combo">COMBO: <span id="combo-value">x1</span></div>
+                <div class="instructions">Move: Mouse | Abduct: Hold SPACE</div>
+            </div>
+            <div class="ui-panel">
+                <div style="color: #ffff00;">ABDUCTED: <span id="abducted-count">0</span></div>
+                <div style="color: #ff00ff; margin-top: 5px;">TIME: <span id="time-value">60</span>s</div>
+            </div>
+        </div>
+
+        <!-- Demo Overlay -->
+        <div id="demo-overlay" class="show">
+            <h1>🛸 UFO ABDUCTION 🛸</h1>
+            <p>DEMO MODE</p>
+            <p style="font-size: 14px; margin-top: 15px;">Watch the demo...</p>
+            <p style="font-size: 12px; color: #888; margin-top: 10px;">Press START to play</p>
+        </div>
+
+        <!-- Controls -->
+        <div id="controls">
+            <button id="start-btn">START GAME</button>
+            <button id="reset-btn">RESET</button>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        const game = {
+            score: 0,
+            combo: 1,
+            abductedCount: 0,
+            timeLeft: 60,
+            isPlaying: false,
+            isDemo: true,
+            isAbducting: false,
+            saucerPos: { x: window.innerWidth / 2 - 60, y: 100 },
+            objects: [],
+            lastAbductionTime: 0,
+            comboTimeout: null,
+            demoInterval: null,
+            gameInterval: null,
+            physicsInterval: null
+        };
+
+        // DOM Elements
+        const saucer = document.getElementById('saucer');
+        const lightBeam = document.getElementById('light-beam');
+        const scoreValue = document.getElementById('score-value');
+        const comboValue = document.getElementById('combo-value');
+        const abductedCount = document.getElementById('abducted-count');
+        const timeValue = document.getElementById('time-value');
+        const demoOverlay = document.getElementById('demo-overlay');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const gameContainer = document.getElementById('game-container');
+
+        // Object Types
+        const objectTypes = [
+            { emoji: '🐄', class: 'cow', weight: 5, value: 100 },
+            { emoji: '🚗', class: 'car', weight: 8, value: 150 },
+            { emoji: '👽', class: 'human', weight: 3, value: 200 },
+            { emoji: '🛸', class: 'ufo', weight: 4, value: 300 },
+            { emoji: '🌲', class: 'trees', weight: 6, value: 80 }
+        ];
+
+        // Initialize
+        function init() {
+            createStars();
+            updateUI();
+            startDemo();
+            setupEventListeners();
+        }
+
+        // Create Stars Background
+        function createStars() {
+            for (let i = 0; i < 50; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.width = Math.random() * 3 + 1 + 'px';
+                star.style.height = star.style.width;
+                star.style.animationDelay = Math.random() * 3 + 's';
+                gameContainer.appendChild(star);
+            }
+        }
+
+        // Create Physics Object
+        function createObject() {
+            const type = objectTypes[Math.floor(Math.random() * objectTypes.length)];
+            const obj = document.createElement('div');
+            obj.className = `object ${type.class}`;
+            obj.textContent = type.emoji;
+            
+            const x = Math.random() * (window.innerWidth - 100) + 50;
+            const y = Math.random() * (window.innerHeight - 200) + 150;
+            
+            obj.style.left = x + 'px';
+            obj.style.top = y + 'px';
+            
+            const objectData = {
+                element: obj,
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                weight: type.weight,
+                value: type.value,
+                type: type.class,
+                beingAbducted: false,
+                abductionProgress: 0
+            };
+            
+            game.objects.push(objectData);
+            gameContainer.appendChild(obj);
+            
+            return objectData;
+        }
+
+        // Physics Update
+        function updatePhysics() {
+            game.objects.forEach(obj => {
+                if (obj.beingAbducted) {
+                    // Move toward saucer
+                    const saucerCenterX = game.saucerPos.x + 60;
+                    const saucerCenterY = game.saucerPos.y + 30;
+                    
+                    const dx = saucerCenterX - obj.x;
+                    const dy = saucerCenterY - obj.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 50) {
+                        // Successfully abducted
+                        abductObject(obj);
+                        return;
+                    }
+                    
+                    const speed = 5;
+                    obj.x += (dx / dist) * speed;
+                    obj.y += (dy / dist) * speed;
+                    
+                    // Scale down as it gets closer
+                    const scale = Math.max(0.3, 1 - (obj.abductionProgress / 100));
+                    obj.element.style.transform = `scale(${scale})`;
+                    obj.abductionProgress += 2;
+                    
+                } else {
+                    // Normal physics
+                    obj.x += obj.vx;
+                    obj.y += obj.vy;
+                    
+                    // Bounce off walls
+                    if (obj.x < 0 || obj.x > window.innerWidth - 50) {
+                        obj.vx *= -1;
+                        obj.x = Math.max(0, Math.min(window.innerWidth - 50, obj.x));
+                    }
+                    if (obj.y < 120 || obj.y > window.innerHeight - 80) {
+                        obj.vy *= -1;
+                        obj.y = Math.max(120, Math.min(window.innerHeight - 80, obj.y));
+                    }
+                    
+                    // Check if in light beam
+                    if (game.isAbducting && isObjectInBeam(obj)) {
+                        obj.beingAbducted = true;
+                        obj.element.classList.add('abducting');
+                    }
+                }
+                
+                // Update position
+                obj.element.style.left = obj.x + 'px';
+                obj.element.style.top = obj.y + 'px';
+            });
+        }
+
+        // Check if object is in light beam
+        function isObjectInBeam(obj) {
+            const beamRect = lightBeam.getBoundingClientRect();
+            const objRect = obj.element.getBoundingClientRect();
+            
+            return objRect.left > beamRect.left && 
+                   objRect.right < beamRect.right &&
+                   objRect.top > beamRect.top &&
+                   objRect.bottom < beamRect.bottom;
+        }
+
+        // Abduct Object
+        function abductObject(obj) {
+            // Remove from game
+            obj.element.remove();
+            game.objects = game.objects.filter(o => o !== obj);
+            
+            // Update score with combo
+            const points = obj.value * game.combo;
+            game.score += points;
+            game.abductedCount++;
+            
+            // Show floating text
+            showFloatingText(`+${points}`, obj.x, obj.y, '#00ffff');
+            
+            // Update combo
+            updateCombo();
+            
+            // Update UI
+            updateUI();
+            
+            // Create new object
+            setTimeout(() => createObject(), 500);
+        }
+
+        // Update Combo System
+        function updateCombo() {
+            clearTimeout(game.comboTimeout);
+            
+            // Increase combo
+            if (Date.now() - game.lastAbductionTime < 2000) {
+                game.combo = Math.min(game.combo + 1, 10);
+            } else {
+                game.combo = 1;
+            }
+            
+            game.lastAbductionTime = Date.now();
+            
+            // Visual feedback
+            comboValue.classList.add('multiplier');
+            setTimeout(() => comboValue.classList.remove('multiplier'), 500);
+            
+            // Reset combo after timeout
+            game.comboTimeout = setTimeout(() => {
+                if (Date.now() - game.lastAbductionTime >= 2000) {
+                    game.combo = 1;
+                    updateUI();
+                }
+            }, 2500);
+        }
+
+        // Show Floating Text
+        function showFloatingText(text, x, y, color) {
+            const ft = document.createElement('div');
+            ft.className = 'floating-text';
+            ft.textContent = text;
+            ft.style.left = x + 'px';
+            ft.style.top = y + 'px';
+            ft.style.color = color;
+            ft.style.textShadow = `0 0 10px ${color}`;
+            gameContainer.appendChild(ft);
+            
+            setTimeout(() => ft.remove(), 1000);
+        }
+
+        // Update UI
+        function updateUI() {
+            scoreValue.textContent = game.score;
+            comboValue.textContent = `x${game.combo}`;
+            abductedCount.textContent = game.abductedCount;
+            timeValue.textContent = game.timeLeft;
+        }
+
+        // Mouse Movement
+        function handleMouseMove(e) {
+            if (!game.isPlaying && !game.isDemo) return;
+            
+            const x = e.clientX - 60;
+            const y = e.clientY - 30;
+            
+            game.saucerPos.x = Math.max(0, Math.min(window.innerWidth - 120, x));
+            game.saucerPos.y = Math.max(50, Math.min(window.innerHeight - 200, y));
+            
+            saucer.style.left = game.saucerPos.x + 'px';
+            saucer.style.top = game.saucerPos.y + 'px';
+            
+            if (game.isAbducting) {
+                updateBeamPosition();
+            }
+        }
+
+        // Update Beam Position
+        function updateBeamPosition() {
+            const beamX = game.saucerPos.x + 10;
+            const beamY = game.saucerPos.y + 50;
+            lightBeam.style.left = beamX + 'px';
+            lightBeam.style.top = beamY + 'px';
+        }
+
+        // Toggle Abduction
+        function toggleAbduction(active) {
+            if (!game.isPlaying && !game.isDemo) return;
+            
+            game.isAbducting = active;
+            
+            if (active) {
+                lightBeam.classList.add('active');
+                updateBeamPosition();
+            } else {
+                lightBeam.classList.remove('active');
+            }
+        }
+
+        // Demo Mode
+        function startDemo() {
+            game.isDemo = true;
+            demoOverlay.classList.add('show');
+            
+            // Create initial objects
+            for (let i = 0; i < 5; i++) {
+                createObject();
+            }
+            
+            // Demo AI
+            let demoTarget = null;
+            let demoPhase = 0;
+            
+            game.demoInterval = setInterval(() => {
+                if (!game.isDemo) return;
+                
+                // Move saucer in pattern
+                if (demoPhase === 0) {
+                    // Find a target
+                    if (game.objects.length > 0) {
+                        demoTarget = game.objects[Math.floor(Math.random() * game.objects.length)];
+                        demoPhase = 1;
+                    }
+                } else if (demoPhase === 1 && demoTarget) {
+                    // Move toward target
+                    const targetX = demoTarget.x - 60;
+                    const targetY = demoTarget.y - 100;
+                    
+                    game.saucerPos.x += (targetX - game.saucerPos.x) * 0.05;
+                    game.saucerPos.y += (targetY - game.saucerPos.y) * 0.05;
+                    
+                    saucer.style.left = game.saucerPos.x + 'px';
+                    saucer.style.top = game.saucerPos.y + 'px';
+                    
+                    // Start abducting when close
+                    if (Math.abs(targetX - game.saucerPos.x) < 50) {
+                        toggleAbduction(true);
+                        if (demoTarget && !demoTarget.beingAbducted && isObjectInBeam(demoTarget)) {
+                            demoTarget.beingAbducted = true;
+                            demoTarget.element.classList.add('abducting');
+                        }
+                    }
+                    
+                    // Reset if object gone
+                    if (!game.objects.includes(demoTarget)) {
+                        toggleAbduction(false);
+                        demoPhase = 0;
+                        demoTarget = null;
+                    }
+                }
+                
+                // Randomly create new objects
+                if (Math.random() < 0.02 && game.objects.length < 8) {
+                    createObject();
+                }
+            }, 50);
+        }
+
+        // Start Game
+        function startGame() {
+            // Clear demo
+            clearInterval(game.demoInterval);
+            game.isDemo = false;
+            demoOverlay.classList.remove('show');
+            
+            // Reset state
+            game.score = 0;
+            game.combo = 1;
+            game.abductedCount = 0;
+            game.timeLeft = 60;
+            game.isPlaying = true;
+            game.lastAbductionTime = 0;
+            
+            // Clear existing objects
+            game.objects.forEach(obj => obj.element.remove());
+            game.objects = [];
+            
+            // Create initial objects
+            for (let i = 0; i < 8; i++) {
+                createObject();
+            }
+            
+            // Start physics
+            game.physicsInterval = setInterval(updatePhysics, 1000 / 60);
+            
+            // Start timer
+            game.gameInterval = setInterval(() => {
+                game.timeLeft--;
+                updateUI();
+                
+                if (game.timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+            
+            updateUI();
+        }
+
+        // End Game
+        function endGame() {
+            game.isPlaying = false;
+            clearInterval(game.physicsInterval);
+            clearInterval(game.gameInterval);
+            toggleAbduction(false);
+            
+            // Show results
+            demoOverlay.innerHTML = `
+                <h1>GAME OVER!</h1>
+                <p>Final Score: ${game.score}</p>
+                <p>Abducted: ${game.abductedCount}</p>
+                <p style="font-size: 14px; margin-top: 15px;">Press START to play again</p>
+            `;
+            demoOverlay.classList.add('show');
+        }
+
+        // Reset Game
+        function resetGame() {
+            clearInterval(game.demoInterval);
+            clearInterval(game.physicsInterval);
+            clearInterval(game.gameInterval);
+            
+            game.objects.forEach(obj => obj.element.remove());
+            game.objects = [];
+            
+            game.score = 0;
+            game.combo = 1;
+            game.abductedCount = 0;
+            game.timeLeft = 60;
+            game.isPlaying = false;
+            game.isDemo = false;
+            game.isAbducting = false;
+            game.saucerPos = { x: window.innerWidth / 2 - 60, y: 100 };
+            
+            saucer.style.left = game.saucerPos.x + 'px';
+            saucer.style.top = game.saucerPos.y + 'px';
+            
+            toggleAbduction(false);
+            updateUI();
+            
+            demoOverlay.innerHTML = `
+                <h1>🛸 UFO ABDUCTION 🛸</h1>
+                <p>RESET COMPLETE</p>
+                <p style="font-size: 12px; color: #888; margin-top: 10px;">Press START to play</p>
+            `;
+            demoOverlay.classList.add('show');
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Mouse movement
+            document.addEventListener('mousemove', handleMouseMove);
+            
+            // Space bar for abduction
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    toggleAbduction(true);
+                }
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    toggleAbduction(false);
+                }
+            });
+            
+            // Buttons
+            startBtn.addEventListener('click', startGame);
+            resetBtn.addEventListener('click', resetGame);
+            
+            // Touch support for mobile
+            let touchStartTime = 0;
+            gameContainer.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                touchStartTime = Date.now();
+                handleMouseMove(e.touches[0]);
+                setTimeout(() => {
+                    if (Date.now() - touchStartTime > 200) {
+                        toggleAbduction(true);
+                    }
+                }, 200);
+            });
+            
+            gameContainer.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                handleMouseMove(e.touches[0]);
+            });
+            
+            gameContainer.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                toggleAbduction(false);
+            });
+        }
+
+        // Start everything
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
